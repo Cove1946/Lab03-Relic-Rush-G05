@@ -68,10 +68,13 @@ DEADLOCK DETECTED
 
 Explain the responsibility of both barriers:
 
-- `roundStart`:
-- `roundEnd`:
+- `roundStart`: Su responsabilidad es sincronizar el arranque de la ronda: ningún aventurero empieza a jugar su turno 
+(playTurn) hasta que todos los hilos (los N aventureros + el hilo del GameEngine) hayan llegado a ese punto.
+- `roundEnd`: Su responsabilidad es sincronizar el cierre de la ronda: el GameEngine no puede tomar el snapshot 
+(printRoundSnapshot) hasta que todos los aventureros hayan terminado su playTurn de esa ronda.
 
 Why is `Thread.sleep(...)` not a valid replacement for a barrier?
+Thread.sleep fija un tiempo arbitrario y fijo, no una condición real de sincronización: no sabe cuántos aventureros ya terminaron ni si alguno tardó más de lo esperado
 
 ## 3. Thread-safety problems
 
