@@ -78,10 +78,10 @@ Thread.sleep fija un tiempo arbitrario y fijo, no una condición real de sincron
 
 ## 3. Thread-safety problems
 
-| Shared state | Problem | Invariant at risk | Solution | Why this solution? |
-|---|---|---|---|---|
-| | | | | |
-| | | | | |
+| Shared state | Problem                                                                                                                                                                                         | Invariant at risk | Solution | Why this solution? |
+|---|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---|---|---|
+| totalCrafted, el número que cuenta cuántas relics se han forjado en total.| Varios jugadores pueden sumarle 1 al mismo tiempo. Como sumar no es una sola operación instantánea (primero se lee el valor, luego se escribe el nuevo), puede pasar que dos jugadores lean el mismo número al mismo tiempo y uno de los dos incrementos "se pierda". | que el total contado sea igual a la cantidad real de relics forjadas.|usar un contador especial pensado para que varios hilos lo usen a la vez (AtomicInteger), o hacer que solo un jugador a la vez pueda sumarle (con synchronized) |así cada suma se hace completa, sin que otro jugador interfiera a la mitad, y no se pierden conteos |
+| la lista donde se guarda cada evento de forja|varios jugadores intentan agregar algo a la lista al mismo tiempo, pero la lista que se está usando (ArrayList) no está preparada para eso, entonces pueden perderse elementos o incluso fallar  |que la cantidad de eventos guardados coincida con la cantidad real de relics forjadas. |usar una lista pensada para varios hilos a la vez, o proteger el add() igual que el contador (solo uno a la vez puede agregar) |evita que dos jugadores escriban en la lista al mismo tiempo y se pisen entre sí, sin necesidad de bloquear todo el juego |
 
 ## 4. Deadlock diagnosis
 
