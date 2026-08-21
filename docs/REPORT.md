@@ -173,9 +173,104 @@ ntes del fix.
 
 | Players | Stations | Rounds | Deadlock? | Invariant result |
 |---:|---:|---:|---|---|
-| 8 | 6 | 50 | | |
-| 32 | 8 | 100 | | |
-| 128 | 8 | 100 | | |
+| 8 | 6 | 50 | No | OK (scoreSum == totalCrafted == eventCount en todas las rondas) |
+| 32 | 8 | 100 | No | OK (scoreSum == totalCrafted == eventCount en todas las rondas) |
+| 128 | 8 | 100 | No | OK (scoreSum == totalCrafted == eventCount en todas las rondas) |
+
+```java
+java -cp target/classes edu.eci.arsw.relicrush.app.InvariantProbe 8 6 50
+```
+```text
+
+=== RELIC RUSH - FINAL SCORE ===
+adventurer-1       50 relics
+adventurer-2       50 relics
+adventurer-3       50 relics
+adventurer-4       50 relics
+adventurer-5       50 relics
+adventurer-6       50 relics
+adventurer-7       50 relics
+adventurer-8       50 relics
+Total by players : 400
+Ledger total     : 400
+Ledger events    : 400
+```
+```java
+ java -cp target/classes edu.eci.arsw.relicrush.app.InvariantProbe 32 8 100
+```
+```text
+
+=== RELIC RUSH - FINAL SCORE ===
+adventurer-1      100 relics
+adventurer-2      100 relics
+adventurer-3      100 relics
+adventurer-4      100 relics
+adventurer-5      100 relics
+adventurer-6      100 relics
+adventurer-7      100 relics
+adventurer-8      100 relics
+adventurer-9      100 relics
+adventurer-10     100 relics
+adventurer-11     100 relics
+adventurer-12     100 relics
+adventurer-13     100 relics
+adventurer-14     100 relics
+adventurer-15     100 relics
+adventurer-16     100 relics
+adventurer-17     100 relics
+adventurer-18     100 relics
+adventurer-19     100 relics
+adventurer-20     100 relics
+adventurer-21     100 relics
+adventurer-22     100 relics
+adventurer-23     100 relics
+adventurer-24     100 relics
+adventurer-25     100 relics
+adventurer-26     100 relics
+adventurer-27     100 relics
+adventurer-28     100 relics
+adventurer-29     100 relics
+adventurer-30     100 relics
+adventurer-31     100 relics
+adventurer-32     100 relics
+Total by players : 3200
+Ledger total     : 3200
+Ledger events    : 3200
+```
+```java
+java -cp target/classes edu.eci.arsw.relicrush.app.InvariantProbe 128 8 100
+```
+```text
+=== RELIC RUSH - FINAL SCORE ===
+adventurer-1      100 relics
+adventurer-2      100 relics
+adventurer-3      100 relics
+adventurer-4      100 relics
+adventurer-5      100 relics
+adventurer-6      100 relics
+adventurer-7      100 relics
+adventurer-8      100 relics
+adventurer-9      100 relics
+adventurer-10     100 relics
+adventurer-11     100 relics
+adventurer-12     100 relics
+adventurer-13     100 relics
+adventurer-14     100 relics
+.....
+adventurer-126    100 relics
+adventurer-127    100 relics
+adventurer-128    100 relics
+Total by players : 12800
+Ledger total     : 12800
+Ledger events    : 12800
+```
+
+```java
+ java -cp target/classes edu.eci.arsw.relicrush.app.DeadlockProbe
+```
+```text
+NO DEADLOCK DETECTED within 2 seconds.
+```
 
 ## 6. Architectural trade-offs
 
