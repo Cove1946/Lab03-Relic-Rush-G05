@@ -135,11 +135,39 @@ DeadlockProbe no descubre este comportamiento por azar: lo construye deliberadam
 
 ![Diagrama Deadlock](images/DiagramaDeadlock.png)
 
-### 4.4 Fix
+### 4.4 Fix 
 
-What condition did you break?
+**What condition did you break?**
 
-How did you preserve concurrency between independent forge operations?
+Se rompió **circular wait**. Las otras tres condiciones de Coffman siguen presentes de forma deliberada, y eso es suficiente: las cuatro deben cumplirse simultáneamente para que exista interbloqueo, así que eliminar una sola basta.
+
+Por qué esa condición y no otra:**
+
+- **Mutual exclusion** no puede eliminarse: el invariante del dominio exige que una estación no sea usada por dos forjas incompatibles a la vez (README §4). Quitarla destruiría justo lo que hay que proteger.
+- **No preemption** es inherente a synchronized: la JVM no ofrece ninguna forma de revocar un monitor a su propietario.
+- **Hold and wait** sería atacable, pero exigiría sustituir los monitores de ForgeStation por ReentrantLock, añadir tryLock con política de reintento y asumir riesgo de livelock: un cambio estructural en varias clases.
+- **Circular wait** es la única que dependía de una decisión de diseño de este código, no del dominio ni de la JVM.
+
+**Cambio concreto:** `LockPair.withBoth` ya no adquiere los monitores en el orden en que el llamador pasó los parámetros. Antes de tomar el primer monitor, normaliza el orden usando ForgeStation.id(), que ya existía en el proyecto (ForgeStation.java:14-16) y es único y estable durante toda la partida, porque GameEngine.createStations los asigna como 1..N (GameEngine.java:120). Eso constituye un orden total sobre los recursos.
+
+**Por qué esto soluciona el deadlock:** con la normalización, `withBoth(X, Y)` y `withBoth(Y, X)` producen **la mi
+sma secuencia de bloqueo**. Todos los hilos adquieren siempre de menor a mayor `id`. Para que existiera un ciclo `
+T1 → T2 → ... → T1`, al menos un hilo tendría que estar esperando una estación de rango **inferior** a una que ya
+retiene; el orden monotónico lo hace imposible por construcción. No es una reducción de la probabilidad del deadlo
+ck: es una **imposibilidad estructural**.
+
+**How did you preserve concurrency between independent forge operations?**
+
+el fix cambia el **orden** de adquisición, no qué se bloquea ni durante cuánto tiempo. Se siguen tomando exactamente los mismos dos monitores de estación, durante el mismo intervalo. No se introdujo ningún lock nuevo, ni compartido, ni global. Comparado con el código defectuoso,**no se elimina ni una sola ejecución concurrente**; solo se eliminan las secuencias de adquisición que formaban ciclo.
+
+**Qué operaciones pueden ejecutarse simultáneamente:**
+
+- **Pares disjuntos: paralelismo total.** Un aventurero forjando en (S1, S2) y otro en (S3, S4) no comparten ningún monitor y jamás se bloquean entre sí.
+- **Pares solapados: serialización mínima.** (S1, S2) y (S2, S5) compiten únicamente por S2. Esa espera es la exclusión mutua que el invariante exige, no un efecto colateral del arreglo — existía igual a
+ntes del fix.
+- **Paralelismo máximo:** ⌊S/2⌋ forjas simultáneas, idéntico a la versión con el defecto. El fix no reduce el techo de concurrencia.
+
+**Qué recursos siguen protegidos:** cada `ForgeStation` conserva su monitor exclusivo. El invariante *"una estación no puede ser usada simultáneamente por dos forjas incompatibles"* nombrado en el README sigue garantizado, porque la exclusión mutua se mantuvo intacta.
 
 ## 5. Verification
 
