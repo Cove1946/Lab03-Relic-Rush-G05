@@ -271,16 +271,60 @@ Ledger events    : 12800
 ```text
 NO DEADLOCK DETECTED within 2 seconds.
 ```
-
 ## 6. Architectural trade-offs
 
-Discuss:
+### 6.1 Correctness / Reliability (Correctitud y Confiabilidad)
 
-- Correctness / reliability
-- Performance / throughput
-- Contention
-- Maintainability
-- Scalability
+- **Invariantes protegidos:**
+    1. *Invariante de consistencia global:* sumatoria de puntajes individuales == ForgeLedger.totalCrafted == total de eventos registrados. Cada reliquia forjada exitosamente se refleja exactamente una vez en todos los registros.
+    2. *Invariante de exclusión mutua de recursos:* Ninguna estación de forja (`ForgeStation`) es utilizada de manera simultánea por dos aventureros.
+    3. *Invariante de liveness (ausencia de Deadlock):* El juego nunca se congela ni entra en interbloqueo por adquisición circular de recursos.
+    4. *Invariante de fases y memoria:* Ningún hilo inicia la ronda N+1 antes de que todos completen la ronda N, garantizando visibilidad coherente del estado al tomar el snapshot.
+
+- **Evidencia empírica:**
+    - Las pruebas de aislamiento (`DeadlockProbe` y `LedgerRaceProbe`) superaron los diagnósticos sin detectar ciclos ni pérdidas de conteo.
+    - Las pruebas de estrés con carga masiva (`InvariantProbe` con 8, 32 y 128 hilos en 100 rondas) confirmaron `invariant=OK` en el 100% de las rondas ejecutadas, con sumas finales idénticas (12800 = 12800 = 12800).
+
+---
+
+### 6.2 Performance / Throughput (Rendimiento y Paralelismo)
+
+- **¿Por qué se evitó un Lock Global?**
+    - Implementar un candado global para toda la operación de forja habría convertido el juego en un sistema estrictamente secuencial (1 sola forja concurrente a la vez), desperdiciando por completo los núcleos de procesamiento de la CPU.
+- **Operaciones que se ejecutan en paralelo:**
+    - Gracias al bloqueo granular por estación en `LockPair`, todas las forjas sobre **pares disjuntos de estaciones** se ejecutan en paralelo al 100% (por ejemplo, un hilo usando las estaciones 1 y 2, y otro usando las estaciones 3 y 4).
+    - El paralelismo máximo alcanzable en el juego equivale a la mitad de las estaciones totales disponibles (por ejemplo, con 8 estaciones se pueden realizar hasta 4 forjas simultáneas).
+    - La sección crítica de la bitácora (`ForgeLedger`) tiene una duración de unos pocos nanosegundos (incremento y adición en memoria), dejando prácticamente todo el tiempo de CPU libre para el crafteo concurrente.
+
+---
+
+### 6.3 Contention (Contención de Candados)
+
+- **Puntos donde ocurre contención:**
+    1. *Contención en estaciones de forja:* Se produce cuando dos aventureros eligen una misma estación compartida (por ejemplo, los pares `(S1, S2)` y `(S1, S5)` compiten por `S1`). Esta contención es inevitable y correcta, pues modela la exclusión física del recurso.
+    2. *Contención en la bitácora (`ForgeLedger`):* Al final de la forja, los hilos compiten por el lock privado de la bitácora para registrar su evento.
+- **Mitigación y diseño:**
+    - El orden estricto de adquisición en `LockPair` (`lower.id()` a `higher.id()`) asegura que la contención en estaciones compartidas resuelva la espera de forma determinista y sin riesgo de ciclos.
+    - La contención en `ForgeLedger` no se convierte en cuello de botella porque el tiempo de retención del lock es mínimo y está desacoplado del tiempo que toma forjar en las estaciones.
+
+---
+
+### 6.4 Maintainability (Mantenibilidad)
+
+- **Encapsulamiento del ordenamiento de bloqueos:**
+    - La regla de adquisición ordenada no está dispersa en la clase `Adventurer` ni en `GameEngine`; reside de forma exclusiva en `LockPair.withBoth(...)`.
+    - La regla es explícita y se basa en una propiedad intrínseca e inmutable del recurso (`ForgeStation.id()`). Si se añaden nuevas estaciones dinámicamente, el orden total sigue garantizado sin cambios de código.
+- **Protección del estado interno:**
+    - El uso del patrón *Private Lock Object* (`private final Object lock`) en `ForgeLedger` asegura que ninguna clase externa pueda interferir con el monitor interno de la bitácora, evitando bloqueos accidentales o acoplamientos indeseados.
+
+---
+
+### 6.5 Scalability (Escalabilidad)
+
+- **Comportamiento cuando el número de jugadores crece y las estaciones permanecen constantes:**
+    - El techo de concurrencia física está acotado por las estaciones disponibles (la mitad del número de estaciones). Al aumentar el número de jugadores (por ejemplo, de 8 a 128 hilos con 8 estaciones fijas), la probabilidad de colisión en las estaciones aumenta significativamente.
+    - El tiempo por ronda escala proporcionalmente a la contención en las estaciones, ya que más hilos quedan en estado `BLOCKED` esperando que se liberen las estaciones.
+    - Sin embargo, **la estabilidad y confiabilidad del sistema es del 100%**: no ocurren condiciones de carrera, no se desborda memoria y la ausencia de deadlocks se mantiene invariable sin importar cuántos jugadores compitan.
 
 ## 7. Mini ADR
 
