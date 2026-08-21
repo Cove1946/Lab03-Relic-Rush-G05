@@ -88,19 +88,52 @@ Thread.sleep fija un tiempo arbitrario y fijo, no una condición real de sincron
 ### 4.1 Evidence
 
 ```text
-PASTE DeadlockProbe OR jcmd/jstack EVIDENCE
+DEADLOCK DETECTED
+- probe-A-anvil-then-furnace waiting on edu.eci.arsw.relicrush.model.ForgeStation@79fc0f2f owned by probe-B-furnace-then-anvil
+- probe-B-furnace-then-anvil waiting on edu.eci.arsw.relicrush.model.ForgeStation@17a7cec2 owned by probe-A-anvil-then-furnace
 ```
 
 ### 4.2 Coffman conditions in Relic Rush
 
-- Mutual exclusion:
-- Hold and wait:
-- No preemption:
-- Circular wait:
+- **Mutual exclusion:** cualesquiera dos aventureros que elijan pares de estaciones con intersección no vacía. En la evidencia, probe-A-anvil-then-furnace y probe-B-furnace-then-anvil. \
+LockPair.withBoth entra a la sección crítica con synchronized (first) (LockPair.java:20) y synchronized (second) (LockPair.java:23). Un monitor de Java admite exactamente un hilo propietario a la vez; cualquier otro hilo que ejecute monitorenter sobre el mismo objeto pasa a estado BLOCKED hasta que el propietario libere.
+
+- **Hold and wait:** Los mismos dos hilos en conflicto; cada uno retiene un monitor y solicita el otro. \
+**LockPair.java**
+
+```bash
+    synchronized (first) {       // adquiere y RETIENE first
+    sleepQuietly(2);            
+    synchronized (second) {     // Solicita second, sin haber soltado first
+        action.run();           
+    }
+}
+```
+
+- **No preemption:** El hilo bloqueado en **LockPair.java:23**, que no tiene forma de arrebatar el monitor a su propietario. /
+El watchdog (GameEngine.java:66-84) detecta el ciclo pero no puede repararlo: su única acción posible es System.exit(2) (GameEngine.java:76). Matar el proceso entero es exactamente lo que se hace cuando no hay expropiación disponible. El propio comentario del starter lo dice: "so you do not have to kill a frozen process manually".
+
+- **Circular wait:** LockPair.withBoth adquiere los monitores en el orden en que el llamador pasó los parámetros. No hay normalización, ordenamiento ni comparación de ningún tipo antes de synchronized (first). Y ese orden lo produce el azar: \
+
+```bash
+int firstIndex  = random.nextInt(stations.size());   // Adventurer.java:68
+do { secondIndex = random.nextInt(stations.size()); }
+while (secondIndex == firstIndex);                    // Adventurer.java:69-72
+
+ForgeStation first  = stations.get(firstIndex);       // Adventurer.java:74
+ForgeStation second = stations.get(secondIndex);      // Adventurer.java:75
+
+LockPair.withBoth(first, second, ...);                // Adventurer.java:77
+```
+
+DeadlockProbe no descubre este comportamiento por azar: lo construye deliberadamente, pasando los mismos dos objetos en orden invertido a cada hilo (DeadlockProbe.java:24-25), que es la razón de los nombres anvil-then-furnace y furnace-then-anvil.
 
 ### 4.3 Wait-for graph
+![alt text](images/DiagramaDeadlock1.png)
 
-Describe or add a diagram.
+![alt text](images/DiagramaDeadlock2.png)
+
+![Diagrama Deadlock](images/DiagramaDeadlock.png)
 
 ### 4.4 Fix
 
