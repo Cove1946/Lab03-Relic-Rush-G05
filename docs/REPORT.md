@@ -2,13 +2,13 @@
 
 ## Team
 
-| Student | ID | GitHub |
-|---|---|---|
-|Cristian Ronaldo Guerrero Buitrago |1000101455 |Cove1946 |
-|Juan Esteban Tellez Valencia | 1000098939 |JuanTellez125 |
-|Andrea Mariana Parra Urrego  |1000101817 |marianaparraurrego-oss |
+| Student | ID | GitHub        |
+|---|---|---------------|
+|Cristian Ronaldo Guerrero Buitrago |1000101455 | Cove1946      |
+|Juan Esteban Tellez Valencia | 1000098939 | JuanTellez125 |
+|Andrea Mariana Parra Urrego  |1000101817 | Mar9793       |
 
-Repository: `URL`
+Repository: `https://github.com/Cove1946/Lab03-Relic-Rush-G05.git`
 
 Final commit: `SHA`
 
@@ -364,6 +364,22 @@ Se decidió adoptar una estrategia de *adquisición ordenada global de recursos 
 
 ## 8. Conclusions
 
-1.
-2.
-3.
+1. El juego tenía dos problemas de concurrencia distintos y separados: un deadlock por
+   adquisición circular de monitores en LockPair (coordinación de recursos), y una
+   condición de carrera en ForgeLedger por operaciones de lectura-escritura no atómicas
+   sobre el contador y la lista de eventos (estado compartido inseguro). Arreglar uno
+   no arreglaba el otro; ambos se confirmaron con evidencia empírica separada
+   (DeadlockProbe y LedgerRaceProbe) antes de corregirlos.
+2. El deadlock se eliminó rompiendo una sola condición de Coffman (circular wait),
+   imponiendo un orden total de adquisición por ForgeStation.id() en LockPair, sin
+   introducir ningún lock global ni reducir el paralelismo entre forjas en estaciones
+   disjuntas. Esto se confirmó con pruebas de estrés de hasta 128 hilos y 100 rondas
+   (InvariantProbe), donde el invariante se cumplió en el 100% de las rondas
+   (scoreSum == totalCrafted == eventCount) y DeadlockProbe no volvió a detectar ciclos.
+3. La coordinación por rondas (roundStart/roundEnd con CyclicBarrier) fue igual de
+   importante que la corrección del deadlock: sin esas barreras no habría forma de
+   garantizar que el snapshot de cada ronda se toma con un estado consistente entre
+   todos los aventureros. Esto demuestra que en sistemas concurrentes la corrección
+   depende tanto de proteger el estado compartido (thread-safety) como de sincronizar
+   correctamente las fases de ejecución (coordination), y que ninguna de las dos
+   por separado es suficiente.
