@@ -326,17 +326,41 @@ NO DEADLOCK DETECTED within 2 seconds.
     - El tiempo por ronda escala proporcionalmente a la contención en las estaciones, ya que más hilos quedan en estado `BLOCKED` esperando que se liberen las estaciones.
     - Sin embargo, **la estabilidad y confiabilidad del sistema es del 100%**: no ocurren condiciones de carrera, no se desborda memoria y la ausencia de deadlocks se mantiene invariable sin importar cuántos jugadores compitan.
 
-## 7. Mini ADR
+## 7. Mini ADR: Estrategia de prevención de Deadlock
 
 ### Context
+En Relic Rush, múltiples hilos de aventureros compiten concurrentemente por adquirir dos estaciones de forja (ForgeStation) exclusivas para crear reliquias. En la versión inicial, cada hilo adquiría los monitores de las estaciones en el orden en que eran seleccionadas al azar. Esto generaba un interbloqueo (deadlock) cuando dos hilos intentaban adquirir los mismos recursos en orden inverso (por ejemplo, el Hilo 1 retenía la Estación A y solicitaba la Estación B, mientras el Hilo 2 retenía la Estación B y solicitaba la Estación A), cumpliendo las cuatro condiciones de Coffman y congelando el juego.
+
+El requerimiento arquitectónico exigía eliminar el interbloqueo garantizando la liveness del sistema, sin recurrir a un bloqueo global que destruyera el paralelismo y preservando el invariante de exclusión mutua por estación.
 
 ### Decision
+Se decidió adoptar una estrategia de *adquisición ordenada global de recursos (Ordered Locking / Resource Hierarchy)* basada en un orden total estricto:
+- Se utiliza el identificador inmutable y único ForgeStation.id() (asignado como 1..N).
+- En LockPair.withBoth(...), antes de ejecutar cualquier bloqueo, se normaliza el orden de adquisición: *todos los hilos adquieren siempre primero el monitor con menor id (lower) y luego el de mayor id (higher)*, sin importar el orden en que el aventurero solicitó las estaciones.
+- Esta decisión rompe estructuralmente la condición de *Espera Circular (Circular Wait)* de Coffman, haciendo que los ciclos de espera sean matemáticamente imposibles en el grafo de recursos.
 
 ### Alternatives considered
+1. *Candado global único (Coarse-Grained Lock):*
+  - Descripción: Sincronizar toda la operación de forja bajo un único monitor central.
+  - Descarte: Aunque evita el deadlock, serializa por completo el juego a 1 sola forja concurrente a la vez, destruyendo el rendimiento y desaprovechando los núcleos de la CPU.
+2. *Adquisición no bloqueante con ReentrantLock y tryLock (Eliminación de Hold and Wait):*
+  - Descripción: Reemplazar monitores intrínsecos por ReentrantLock. Si no se puede adquirir la segunda estación de inmediato, se libera la primera, se espera un tiempo aleatorio y se reintenta.
+  - Descarte: Introduce alta complejidad, sobrecarga de CPU por reintentos activos y riesgo de Livelock o inanición (starvation) bajo alta concurrencia.
+3. *Ordenamiento jerárquico por ID (Seleccionada):*
+  - Justificación: Mantiene los monitores intrínsecos de Java (synchronized), es liviana, no requiere reintentos y maximiza el paralelismo en pares disjuntos.
 
 ### Consequences
+- *Consecuencias positivas:*
+  - *Ausencia total de deadlocks por diseño:* Ningún hilo puede quedar bloqueado en un ciclo de espera circular.
+  - *Paralelismo óptimo:* Hasta la mitad de las estaciones totales disponibles pueden forjar de manera simultánea en pares disjuntos.
+  - *Alta mantenibilidad:* La lógica queda 100% encapsulada en LockPair sin afectar a Adventurer ni a GameEngine.
+- *Compromisos / Trade-offs:*
+  - Requiere como precondición obligatoria que cada recurso posea un identificador único y comparable.
+  - Existe contención natural (espera bloqueante) cuando dos hilos comparten una estación, lo cual es el comportamiento correcto exigido por el dominio.
 
 ### Evidence
+- *Prueba de diagnóstico (DeadlockProbe):* Dos hilos ejecutando accesos cruzados deliberados ((A, B) y (B, A)) completaron su ejecución sin bloqueos, reportando: NO DEADLOCK DETECTED within 2 seconds.
+- *Pruebas de estrés (InvariantProbe):* En ejecuciones con 8, 32 y hasta 128 hilos en 100 rondas continuas, se completaron 12,800 transacciones con 0 bloqueos y 100% de invariantes cumplidos (invariant=OK).
 
 ## 8. Conclusions
 
