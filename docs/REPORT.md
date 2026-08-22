@@ -10,7 +10,7 @@
 
 Repository: `https://github.com/Cove1946/Lab03-Relic-Rush-G05.git`
 
-Final commit: `SHA`
+Final commit: `Fix:Report`
 
 ## 1. Baseline observations
 
